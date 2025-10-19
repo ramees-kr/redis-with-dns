@@ -62,37 +62,53 @@
       <div class="card-body">
         <h5 class="card-title">Why Use a Redis Hash?</h5>
         <p>
-          We need to store multiple pieces of information about a domain: its
-          `hit_count` and its `last_fetched` timestamp.
+          A <strong>Hash</strong> is perfect for storing "objects," or any data
+          with named fields. This project demonstrates two powerful use cases
+          for Hashes:
         </p>
+
+        <ol>
+          <li>
+            <strong>This Page (Metadata):</strong> We use a Hash
+            (<code>dns:meta:...</code>) to store counters and timestamps for a
+            domain. Commands like <code>HINCRBY</code> are atomic and
+            purpose-built for incrementing a field, making it perfect for
+            analytics.
+          </li>
+          <li>
+            <strong>Our Core Cache (Home Page):</strong> We use a Hash
+            (<code>dns:cache:...</code>) to store the *result* of a DNS lookup.
+            The fields (<code>records</code>, <code>fetched_at</code>) are
+            stored together under a single key.
+          </li>
+        </ol>
+
         <p>
-          The "naive" way is to use multiple String keys:
-          <br />
-          <code>SET "dns:google.com:hits" 5</code>
-          <br />
-          <code>SET "dns:google.com:last" "..."</code>
+          The alternative is using multiple String keys (e.g.,
+          <code>dns:google.com:hits</code>,
+          <code>dns:google.com:last_fetched</code>). A Hash is far more
+          memory-efficient and cleaner, as it groups all related data under one
+          key.
         </p>
-        <p>
-          A <strong>Hash</strong> is far more efficient. It lets us store an
-          "object" (a collection of field-value pairs) under a *single key*.
-          This is much cleaner and uses significantly less memory when you have
-          thousands or millions of keys.
-        </p>
+
+        <h6 class="mt-4">Key Commands for Hashes:</h6>
         <ul class="list-unstyled">
           <li class="mb-2">
-            <code class="text-danger">HINCRBY</code>: Atomically
-            <strong>H</strong
-            >ash-<strong>INCR</strong>ement-<strong>BY</strong>. Perfect for
-            counters. Performance: <strong>O(1)</strong>.
+            <code class="text-danger">HSET</code> / <code>HSETNX</code>: Sets a
+            field's value. Performance: <strong>O(1)</strong>.
           </li>
           <li class="mb-2">
-            <code class="text-danger">HSET</code>: Sets the value of a field in
-            the hash. Performance: <strong>O(1)</strong>.
+            <code class="text-danger">HGET</code>: Gets a single field's value.
+            Performance: <strong>O(1)</strong>.
+          </li>
+          <li class="mb-2">
+            <code class="text-danger">HINCRBY</code>: Atomically increments a
+            field's value. Performance: <strong>O(1)</strong>.
           </li>
           <li>
             <code class="text-danger">HGETALL</code>: Gets *all* fields and
             values. Performance: <strong>O(N)</strong>, where N is the number of
-            fields (which is small for us).
+            fields (use with caution on large hashes).
           </li>
         </ul>
       </div>

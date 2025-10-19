@@ -23,10 +23,11 @@ def home():
     if request.method == 'POST':
         # 1. Get the domain from the form
         domain_name = request.form.get('domain')
+        record_type = request.form.get('record_type', 'A')
 
         if domain_name:
             # records will be a list of IPs or an {"error": ...} dict
-            records, ttl, status, duration = get_dns_lookup(domain_name)
+            records, ttl, status, duration = get_dns_lookup(domain_name, record_type)
             
             context['domain'] = domain_name
             context['records'] = records # Pass the list or dict to the template
@@ -38,17 +39,16 @@ def home():
             is_success = (status == "hit" or status == "miss")
             
             if r and is_success:
-                # --- Lists Logic (Unchanged) ---
-                r.lpush(RECENT_QUERIES_KEY, domain_name)
+                log_entry = f"{domain_name} ({record_type})"
+                r.lpush(RECENT_QUERIES_KEY, log_entry)
                 r.ltrim(RECENT_QUERIES_KEY, 0, MAX_RECENT_QUERIES - 1)
                 
-                # --- Hashes Logic (Tutorial Page) (Unchanged) ---
+                # Metadata and Popularity are still domain-based
                 hash_key = f"{META_KEY_PREFIX}{domain_name}"
                 r.hincrby(hash_key, 'hit_count', 1)
                 current_timestamp = time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime())
                 r.hset(hash_key, 'last_fetched', current_timestamp)
                 
-                # --- Sorted Sets Logic (Phase 4) ---
                 r.zincrby(POPULARITY_KEY, 1, domain_name)
 
     return render_template('home.html', **context)

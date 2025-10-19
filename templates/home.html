@@ -12,19 +12,26 @@
   <div class="card-body">
     <h5 class="card-title">Query a Domain</h5>
 
-    <form method="POST" action="/">
-      <div class="input-group">
-        <input
-          type="text"
-          class="form-control"
-          name="domain"
-          placeholder="e.g., google.com"
-          value="{{ domain or '' }}"
-          required
-        />
-        <button class="btn btn-primary" type="submit">Query</button>
-      </div>
-    </form>
+<form method="POST" action="/">
+        <div class="input-group">
+          <input 
+            type="text" 
+            class="form-control" 
+            name="domain" 
+            placeholder="e.g., google.com"
+            value="{{ domain or '' }}"
+            required>
+          
+          <select class="form-select" name="record_type" style="flex-grow: 0.2;">
+            <option value="A" {% if record_type == 'A' %}selected{% endif %}>A</option>
+            <option value="MX" {% if record_type == 'MX' %}selected{% endif %}>MX</option>
+            <option value="TXT" {% if record_type == 'TXT' %}selected{% endif %}>TXT</option>
+            <option value="NS" {% if record_type == 'NS' %}selected{% endif %}>NS</option>
+          </select>
+          
+          <button class="btn btn-primary" type="submit">Query</button>
+        </div>
+      </form>
   </div>
 </div>
 
@@ -40,46 +47,31 @@
     <span class="badge text-bg-warning fs-6 mb-2">Cache Miss</span>
     {% endif %}
 
-    <table class="table table-dark table-striped-columns mt-3">
-      <tbody>
-        <tr>
-          {% if records.error %}
-          <td style="width: 150px"><strong>Error:</strong></td>
-          <td><code>{{ records.error }}</code></td>
-          {% else %}
-          <td style="width: 150px"><strong>'A' Records:</strong></td>
-          <td>
-            {% for ip in records %}
-            <code>{{ ip }}</code><br />
-            {% endfor %}
-          </td>
-          {% endif %}
-        </tr>
-        <tr>
-          <td><strong>Cache Key:</strong></td>
-          {% if 'negative' in status %}
-          <td><code>dns:nx:{{ domain }}</code> (String)</td>
-          {% else %}
-          <td><code>dns:cache:{{ domain }}</code> (Hash)</td>
-          {% endif %}
-        </tr>
-        <tr>
-          <td><strong>TTL Remaining:</strong></td>
-          <td>{{ ttl }} seconds</td>
-        </tr>
-        <tr>
-          <td><strong>Lookup Time:</strong></td>
-          <td>
-            <strong>{{ duration }} ms</strong>
-            {% if 'hit' in status %}
-            <span class="text-success">(Fetched from Redis Cache)</span>
+<table class="table table-dark table-striped-columns mt-3">
+        <tbody>
+          <tr>
+            {% if records.error %}
+              <td style="width: 150px;"><strong>Error:</strong></td>
+              <td><code>{{ records.error }}</code></td>
             {% else %}
-            <span class="text-warning">(Fetched from Live DNS)</span>
+              <td style="width: 150px;"><strong>{{ record_type }} Records:</strong></td>
+              <td>
+                {% for record in records %}
+                  <code>{{ record }}</code><br>
+                {% endfor %}
+              </td>
             {% endif %}
-          </td>
-        </tr>
-      </tbody>
-    </table>
+          </tr>
+          <tr>
+            <td><strong>Cache Key:</strong></td>
+            {% if 'negative' in status %}
+              <td><code>dns:nx:{{ domain }}:{{ record_type }}</code> (String)</td>
+            {% else %}
+              <td><code>dns:cache:{{ domain }}:{{ record_type }}</code> (Hash)</td>
+            {% endif %}
+          </tr>
+          </tbody>
+      </table>
   </div>
 </div>
 {% endif %} {% endblock %}

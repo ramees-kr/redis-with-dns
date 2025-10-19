@@ -23,21 +23,19 @@ except redis.exceptions.ConnectionError as e:
 
 # --- Core DNS Function  ---
 
-def get_dns_lookup(domain: str):
+def get_dns_lookup(domain: str, record_type: str = 'A'):
     """
-    Performs a DNS 'A' record lookup using a more advanced Redis cache.
+    Performs a DNS lookup for a specific record type using a Redis cache.
     
-    1. Checks for a "negative cache" (String) for NXDOMAIN.
-    2. Checks for a "cache" (Hash) for successful lookups.
-    3. On miss, performs a real DNS lookup.
-       - Caches successes in a Hash with the record's real TTL.
-       - Caches failures (NXDOMAIN) in a String with a fixed TTL.
+    Caches successes in a Hash (Key: dns:cache:<domain>:<type>)
+    Caches failures in a String (Key: dns:nx:<domain>:<type>)
     """
     if r is None:
         return {"error": "Redis connection failed"}, 0, "error", 0.0
         
-    cache_key = f"dns:cache:{domain}"
-    negative_key = f"dns:nx:{domain}"
+    # NEW: Type-specific keys
+    cache_key = f"dns:cache:{domain}:{record_type}"
+    negative_key = f"dns:nx:{domain}:{record_type}"
     
     start_time = time.perf_counter()
     
@@ -45,65 +43,65 @@ def get_dns_lookup(domain: str):
     if r.get(negative_key):
         ttl = r.ttl(negative_key)
         duration_ms = (time.perf_counter() - start_time) * 1000
-        return {"error": "Domain not found (Cached)"}, ttl, "hit (negative)", duration_ms
+        return {"error": f"{record_type} record not found (Cached)"}, ttl, "hit (negative)", duration_ms
         
     # 2. Check for successful cache (Hash)
-    # HGETALL is O(N) where N is fields, which is small.
     cached_response = r.hgetall(cache_key)
     
     if cached_response:
         # --- Cache Hit ---
         ttl = r.ttl(cache_key)
-        # Parse the JSON string back into a list
-        records = json.loads(cached_response.get("A_records", "[]"))
+        records = json.loads(cached_response.get("records", "[]"))
         duration_ms = (time.perf_counter() - start_time) * 1000
         return records, ttl, "hit", duration_ms
 
     # --- 3. Cache Miss ---
-    print(f"Cache MISSED for {domain}. Performing real lookup...")
+    print(f"Cache MISSED for {domain} ({record_type}). Performing real lookup...")
     
     try:
         resolver = dns.resolver.Resolver()
-        # By default, resolve() follows CNAMEs for us
-        answers = resolver.resolve(domain, 'A')
+        # Use the provided record_type
+        answers = resolver.resolve(domain, record_type)
         
         # --- Got a successful answer ---
         
-        # Get the REAL TTL from the response
         record_ttl = answers.rrset.ttl
         
-        # Get ALL 'A' records, not just the first one
-        ip_addresses = [str(a) for a in answers]
+        # Get ALL records, converting them to simple strings
+        # This handles A, MX, TXT, NS, etc. cleanly
+        records_list = []
+        for a in answers:
+            if record_type == 'MX':
+                records_list.append(f"{a.preference} {a.exchange}")
+            elif record_type == 'TXT':
+                # TXT records are bytes, decode them and clean up quotes
+                records_list.append(b''.join(a.strings).decode('utf-8'))
+            else:
+                records_list.append(str(a))
         
-        # Store as a JSON string
-        ip_json = json.dumps(ip_addresses)
+        records_json = json.dumps(records_list)
         
-        # Prepare the Hash payload
         payload = {
-            "A_records": ip_json,
+            "records": records_json,
             "fetched_at": time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime()),
-            "record_type": "A"
+            "record_type": record_type
         }
         
-        # Use a pipeline for an atomic transaction
         pipe = r.pipeline()
-        # Create the hash with all its fields
         pipe.hset(cache_key, mapping=payload)
-        # Set the dynamic TTL on the *entire key*
         pipe.expire(cache_key, record_ttl)
         pipe.execute()
         
         duration_ms = (time.perf_counter() - start_time) * 1000
-        return ip_addresses, record_ttl, "miss", duration_ms
+        return records_list, record_ttl, "miss", duration_ms
 
-    except dns.resolver.NXDOMAIN:
-        # --- Got a "Domain Not Found" error ---
-        
-        # Use SETEX to set the negative cache (our String demo)
+    except (dns.resolver.NXDOMAIN, dns.resolver.NoAnswer, dns.resolver.NoNameservers):
+        # --- Got a "Not Found" or "No Answer" error ---
         r.setex(negative_key, NEGATIVE_CACHE_TTL_SECONDS, "NXDOMAIN")
         
         duration_ms = (time.perf_counter() - start_time) * 1000
-        return {"error": "Domain not found"}, NEGATIVE_CACHE_TTL_SECONDS, "miss (negative)", duration_ms
+        error_msg = f"{record_type} record not found for {domain}"
+        return {"error": error_msg}, NEGATIVE_CACHE_TTL_SECONDS, "miss (negative)", duration_ms
         
     except Exception as e:
         print(f"Error during DNS lookup: {e}")
