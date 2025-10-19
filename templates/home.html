@@ -1,0 +1,61 @@
+{% extends "layout.html" %} {% block content %}
+
+<h1 class="mb-4">Redis DNS Cache</h1>
+<p class="lead">
+  This tool performs a DNS lookup and uses Redis to cache the result for 60
+  seconds. Query a domain twice to see the cache in action!
+</p>
+
+<hr class="my-4" />
+
+<div class="card bg-dark border-secondary mb-4">
+  <div class="card-body">
+    <h5 class="card-title">Query a Domain</h5>
+
+    <form method="POST" action="/">
+      <div class="input-group">
+        <input
+          type="text"
+          class="form-control"
+          name="domain"
+          placeholder="e.g., google.com"
+          value="{{ domain or '' }}"
+          required
+        />
+        <button class="btn btn-primary" type="submit">Query</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% if domain %}
+<div class="card bg-dark border-secondary">
+  <div class="card-header">
+    Result for: <strong class="text-info">{{ domain }}</strong>
+  </div>
+  <div class="card-body">
+    {% if status == 'hit' %}
+    <span class="badge text-bg-success fs-6 mb-2">Cache Hit</span>
+    {% else %}
+    <span class="badge text-bg-warning fs-6 mb-2">Cache Miss</span>
+    {% endif %}
+
+    <table class="table table-dark table-striped-columns mt-3">
+      <tbody>
+        <tr>
+          <td style="width: 150px"><strong>IP Address:</strong></td>
+          <td><code>{{ ip }}</code></td>
+        </tr>
+        <tr>
+          <td><strong>Cache Key:</strong></td>
+          <td><code>dns:{{ domain }}</code></td>
+        </tr>
+        <tr>
+          <td><strong>TTL Remaining:</strong></td>
+          <td>{{ ttl }} seconds</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %} {% endblock %}
