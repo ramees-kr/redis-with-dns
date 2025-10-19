@@ -34,7 +34,7 @@ def get_dns_lookup(domain: str):
     5. Returns the IP, TTL, and 'miss' status.
     """
     if r is None:
-        return None, 0, "Redis connection failed"
+        return None, 0, "Redis connection failed", 0
         
     cache_key = f"dns:{domain}"
     
@@ -76,8 +76,8 @@ def get_dns_lookup(domain: str):
 
     except dns.resolver.NXDOMAIN:
         # The domain does not exist
-        return "Domain not found", 0, "miss"
+        return "Domain not found", 0, "miss", 0
     except Exception as e:
         # Other DNS or general errors
         print(f"Error during DNS lookup: {e}")
-        return None, 0, f"error: {e}"
+        return None, 0, f"error: {e}", 0
