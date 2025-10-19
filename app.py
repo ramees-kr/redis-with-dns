@@ -18,13 +18,14 @@ def home():
         
         if domain_name:
             # 2. Call our DNS/Redis logic
-            ip, ttl, status = get_dns_lookup(domain_name)
+            ip, ttl, status, duration = get_dns_lookup(domain_name)
             
             # 3. Add all results to the context
             context['domain'] = domain_name
             context['ip'] = ip
             context['ttl'] = ttl
             context['status'] = status
+            context['duration'] = f"{duration:.2f}"
 
     # 4. Render the template, passing in all context variables
     # If it's a GET request, context is empty and the form is blank

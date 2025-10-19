@@ -54,6 +54,17 @@
           <td><strong>TTL Remaining:</strong></td>
           <td>{{ ttl }} seconds</td>
         </tr>
+        <tr>
+          <td><strong>Lookup Time:</strong></td>
+          <td>
+            <strong>{{ duration }} ms</strong>
+            {% if status == 'hit' %}
+            <span class="text-success">(Fetched from Redis)</span>
+            {% else %}
+            <span class="text-warning">(Fetched from live DNS)</span>
+            {% endif %}
+          </td>
+        </tr>
       </tbody>
     </table>
   </div>
