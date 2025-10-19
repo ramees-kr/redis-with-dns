@@ -15,11 +15,12 @@ def home():
     """
     # This context dict will hold all variables for the template
     context = {}
+    context['active_page'] = 'home'  # For sidebar navigation
     
     if request.method == 'POST':
         # 1. Get the domain from the form
         domain_name = request.form.get('domain')
-        
+
         if domain_name:
             # 2. Call our DNS/Redis logic
             ip, ttl, status, duration = get_dns_lookup(domain_name)
@@ -45,7 +46,10 @@ def home():
 
 @app.route('/feature/lists')
 def feature_lists():
-    
+    """
+    Renders the Feature Lists page, displaying recent DNS queries.
+    Fetches the list of recent queries from Redis and passes them to the template.
+    """
     # Fetch the list of recent queries from Redis
     recent_queries = []
     if r:
