@@ -1,0 +1,135 @@
+{% extends "layout.html" %} {% block content %}
+<h1 class="mb-1">Data Structure: Lists</h1>
+<p class="lead text-info">Use Case: A Capped List of Recent Queries</p>
+<hr class="my-4" />
+
+<div class="row g-4">
+  <div class="col-md-6">
+    <div class="card bg-dark border-secondary h-100">
+      <div class="card-body">
+        <h5 class="card-title">Live Demo: 10 Most Recent Queries</h5>
+        <p class="card-text">
+          Go to the "Home" page and query a few domains. You will see them
+          appear at the top of this list in real-time.
+        </p>
+
+        {% if recent_queries %}
+        <ul class="list-group">
+          {% for query in recent_queries %}
+          <li class="list-group-item bg-dark text-white border-secondary">
+            {% if loop.index == 1 %}
+            <span class="badge text-bg-primary me-2">NEW</span>
+            {% endif %} {{ query }}
+          </li>
+          {% endfor %}
+        </ul>
+        {% else %}
+        <p class="text-secondary">No queries yet. Go query some domains!</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-6">
+    <div class="card bg-dark border-secondary h-100">
+      <div class="card-body">
+        <h5 class="card-title">Why Use a Redis List?</h5>
+        <p>
+          We need to store a list of the "10 most recent" queries. This is often
+          called a "capped list" or a "timeline."
+        </p>
+        <p>
+          A Redis <strong>List</strong> is the perfect data structure for this
+          because it's optimized for adding items to the *front* (or back) of a
+          collection.
+        </p>
+        <ul class="list-unstyled">
+          <li class="mb-2">
+            <code class="text-danger">LPUSH</code>: Adds an item to the "left"
+            (head) of the list. This is an <strong>O(1)</strong> operation,
+            meaning it's extremely fast and takes the same amount of time
+            whether the list has 10 items or 10 million.
+          </li>
+          <li>
+            <code class="text-danger">LTRIM</code>: Efficiently "trims" the list
+            to a fixed size. We use it to keep only the 10 newest items. This is
+            an <strong>O(N)</strong> operation, but N is just the number of
+            items *removed*, not the size of the list, so it's very fast for our
+            use case.
+          </li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-12">
+    <div class="card bg-dark border-secondary">
+      <div class="card-body">
+        <h5 class="card-title">Technical Deep Dive</h5>
+
+        <ul class="nav nav-tabs" id="myTab" role="tablist">
+          <li class="nav-item" role="presentation">
+            <button
+              class="nav-link active"
+              id="python-tab"
+              data-bs-toggle="tab"
+              data-bs-target="#python-tab-pane"
+              type="button"
+            >
+              Python (Flask)
+            </button>
+          </li>
+          <li class="nav-item" role="presentation">
+            <button
+              class="nav-link"
+              id="cli-tab"
+              data-bs-toggle="tab"
+              data-bs-target="#cli-tab-pane"
+              type="button"
+            >
+              Try it in `redis-cli`
+            </button>
+          </li>
+        </ul>
+        <div class="tab-content mt-3" id="myTabContent">
+          <div class="tab-pane fade show active" id="python-tab-pane">
+            <p>On every DNS lookup, we run these two commands:</p>
+            <pre><code class="language-python" style="background: #2b2b2b; color: #f8f8f2; padding: 1em; display: block; border-radius: 5px;">
+# 1. Add the new domain to the front of the list
+r.lpush("dns:recent", "google.com")
+
+# 2. Trim the list to a max size of 10 (indexes 0-9)
+r.ltrim("dns:recent", 0, 9)
+</code></pre>
+            <p>To display the list on this page, we run:</p>
+            <pre><code class="language-python" style="background: #2b2b2b; color: #f8f8f2; padding: 1em; display: block; border-radius: 5px;">
+# Get all items from the list (index 0 to -1)
+recent_queries = r.lrange("dns:recent", 0, -1)
+</code></pre>
+          </div>
+
+          <div class="tab-pane fade" id="cli-tab-pane">
+            <p>
+              You can interact with this data live! Open your terminal and run
+              <code class="text-info">redis-cli</code>, then try these commands:
+            </p>
+            <pre><code style="background: #2b2b2b; color: #f8f8f2; padding: 1em; display: block; border-radius: 5px;">
+# See all items in the list and their indexes
+LRANGE dns:recent 0 -1
+
+# See just the first 5 items
+LRANGE dns:recent 0 4
+
+# See how many items are in the list
+LLEN dns:recent
+
+# Add an item yourself and then refresh this page!
+LPUSH dns:recent "my-test.com"
+</code></pre>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
