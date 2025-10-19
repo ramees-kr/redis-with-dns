@@ -9,6 +9,7 @@ app = Flask(__name__)
 RECENT_QUERIES_KEY = "dns:recent"
 MAX_RECENT_QUERIES = 10
 META_KEY_PREFIX = "dns:meta:"
+POPULARITY_KEY = "dns:popularity"
 
 @app.route('/', methods=['GET', 'POST'])
 def home():
@@ -24,36 +25,32 @@ def home():
         domain_name = request.form.get('domain')
 
         if domain_name:
-            # 2. Call our DNS/Redis logic
-            ip, ttl, status, duration = get_dns_lookup(domain_name)
+            # records will be a list of IPs or an {"error": ...} dict
+            records, ttl, status, duration = get_dns_lookup(domain_name)
             
-            # 3. Add all results to the context
             context['domain'] = domain_name
-            context['ip'] = ip
+            context['records'] = records # Pass the list or dict to the template
             context['ttl'] = ttl
             context['status'] = status
             context['duration'] = f"{duration:.2f}"
-
-            if r and status != "error":
-                # LPUSH adds the new domain to the left (front) of the list
+            
+            # Check if the lookup was successful
+            is_success = (status == "hit" or status == "miss")
+            
+            if r and is_success:
+                # --- Lists Logic (Unchanged) ---
                 r.lpush(RECENT_QUERIES_KEY, domain_name)
-                # LTRIM trims the list to keep only the first 10 items (0-9)
                 r.ltrim(RECENT_QUERIES_KEY, 0, MAX_RECENT_QUERIES - 1)
-
-
-                hash_key = f"{META_KEY_PREFIX}{domain_name}"
-                # 1. Increment the 'hit_count' field by 1
-                # HINCRBY is atomic and safe.
-                r.hincrby(hash_key, 'hit_count', 1)
                 
-                # 2. Set the 'last_fetched' field to the current timestamp
-                # HSET is used to set or update a field's value.
+                # --- Hashes Logic (Tutorial Page) (Unchanged) ---
+                hash_key = f"{META_KEY_PREFIX}{domain_name}"
+                r.hincrby(hash_key, 'hit_count', 1)
                 current_timestamp = time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime())
                 r.hset(hash_key, 'last_fetched', current_timestamp)
+                
+                # --- Sorted Sets Logic (Phase 4) ---
+                r.zincrby(POPULARITY_KEY, 1, domain_name)
 
-    # 4. Render the template, passing in all context variables
-    # If it's a GET request, context is empty and the form is blank
-    # If it's a POST, context is full and the results are shown
     return render_template('home.html', **context)
 
 

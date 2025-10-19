@@ -43,12 +43,25 @@
     <table class="table table-dark table-striped-columns mt-3">
       <tbody>
         <tr>
-          <td style="width: 150px"><strong>IP Address:</strong></td>
-          <td><code>{{ ip }}</code></td>
+          {% if records.error %}
+          <td style="width: 150px"><strong>Error:</strong></td>
+          <td><code>{{ records.error }}</code></td>
+          {% else %}
+          <td style="width: 150px"><strong>'A' Records:</strong></td>
+          <td>
+            {% for ip in records %}
+            <code>{{ ip }}</code><br />
+            {% endfor %}
+          </td>
+          {% endif %}
         </tr>
         <tr>
           <td><strong>Cache Key:</strong></td>
-          <td><code>dns:{{ domain }}</code></td>
+          {% if 'negative' in status %}
+          <td><code>dns:nx:{{ domain }}</code> (String)</td>
+          {% else %}
+          <td><code>dns:cache:{{ domain }}</code> (Hash)</td>
+          {% endif %}
         </tr>
         <tr>
           <td><strong>TTL Remaining:</strong></td>
@@ -58,10 +71,10 @@
           <td><strong>Lookup Time:</strong></td>
           <td>
             <strong>{{ duration }} ms</strong>
-            {% if status == 'hit' %}
-            <span class="text-success">(Fetched from Redis)</span>
+            {% if 'hit' in status %}
+            <span class="text-success">(Fetched from Redis Cache)</span>
             {% else %}
-            <span class="text-warning">(Fetched from live DNS)</span>
+            <span class="text-warning">(Fetched from Live DNS)</span>
             {% endif %}
           </td>
         </tr>
