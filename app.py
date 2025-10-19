@@ -23,7 +23,7 @@ def home():
     if request.method == 'POST':
         # 1. Get the domain from the form
         domain_name = request.form.get('domain')
-        record_type = request.form.get('record_type', 'A')
+        record_type = request.form.get('record_type', 'A').strip()
 
         if domain_name:
             # records will be a list of IPs or an {"error": ...} dict

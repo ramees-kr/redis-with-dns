@@ -23,11 +23,11 @@
             required>
           
           <select class="form-select" name="record_type" style="flex-grow: 0.2;">
-            <option value="A" {% if record_type == 'A' %}selected{% endif %}>A</option>
-            <option value="MX" {% if record_type == 'MX' %}selected{% endif %}>MX</option>
-            <option value="TXT" {% if record_type == 'TXT' %}selected{% endif %}>TXT</option>
-            <option value="NS" {% if record_type == 'NS' %}selected{% endif %}>NS</option>
-          </select>
+  <option value="A" {% if record_type == 'A' %}selected{% endif %}>A</option>
+  <option value="MX" {% if record_type == 'MX' %}selected{% endif %}>MX</option>
+  <option value="TXT" {% if record_type == 'TXT' %}selected{% endif %}>TXT</option>
+  <option value="NS" {% if record_type == 'NS' %}selected{% endif %}>NS</option>
+</select>
           
           <button class="btn btn-primary" type="submit">Query</button>
         </div>
