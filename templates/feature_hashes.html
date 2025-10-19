@@ -1,0 +1,176 @@
+{% extends "layout.html" %} {% block content %}
+<h1 class="mb-1">Data Structure: Hashes</h1>
+<p class="lead text-info">Use Case: Storing Domain Metadata as an Object</p>
+<hr class="my-4" />
+
+<div class="row g-4">
+  <div class="col-md-6">
+    <div class="card bg-dark border-secondary h-100">
+      <div class="card-body">
+        <h5 class="card-title">Live Demo: Domain Metadata</h5>
+        <p class="card-text">
+          Go to the "Home" page and query a domain (e.g., `google.com`) a few
+          times. Then, look it up here to see its metadata.
+        </p>
+
+        <form method="POST" action="/feature/hashes">
+          <div class="input-group">
+            <input
+              type="text"
+              class="form-control"
+              name="domain"
+              placeholder="e.g., google.com"
+              value="{{ domain or '' }}"
+              required
+            />
+            <button class="btn btn-primary" type="submit">Get Metadata</button>
+          </div>
+        </form>
+
+        {% if domain %}
+        <h6 class="mt-4">
+          Metadata for: <code class="text-info">{{ hash_key }}</code>
+        </h6>
+        {% if metadata %}
+        <table class="table table-dark table-striped-columns mt-3">
+          <thead>
+            <tr>
+              <th>Field</th>
+              <th>Value</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for field, value in metadata.items() %}
+            <tr>
+              <td><code>{{ field }}</code></td>
+              <td><code>{{ value }}</code></td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% else %}
+        <p class="text-secondary mt-3">
+          No metadata found. Go query this domain on the Home page first!
+        </p>
+        {% endif %} {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-6">
+    <div class="card bg-dark border-secondary h-100">
+      <div class="card-body">
+        <h5 class="card-title">Why Use a Redis Hash?</h5>
+        <p>
+          We need to store multiple pieces of information about a domain: its
+          `hit_count` and its `last_fetched` timestamp.
+        </p>
+        <p>
+          The "naive" way is to use multiple String keys:
+          <br />
+          <code>SET "dns:google.com:hits" 5</code>
+          <br />
+          <code>SET "dns:google.com:last" "..."</code>
+        </p>
+        <p>
+          A <strong>Hash</strong> is far more efficient. It lets us store an
+          "object" (a collection of field-value pairs) under a *single key*.
+          This is much cleaner and uses significantly less memory when you have
+          thousands or millions of keys.
+        </p>
+        <ul class="list-unstyled">
+          <li class="mb-2">
+            <code class="text-danger">HINCRBY</code>: Atomically
+            <strong>H</strong
+            >ash-<strong>INCR</strong>ement-<strong>BY</strong>. Perfect for
+            counters. Performance: <strong>O(1)</strong>.
+          </li>
+          <li class="mb-2">
+            <code class="text-danger">HSET</code>: Sets the value of a field in
+            the hash. Performance: <strong>O(1)</strong>.
+          </li>
+          <li>
+            <code class="text-danger">HGETALL</code>: Gets *all* fields and
+            values. Performance: <strong>O(N)</strong>, where N is the number of
+            fields (which is small for us).
+          </li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-12">
+    <div class="card bg-dark border-secondary">
+      <div class="card-body">
+        <h5 class="card-title">Technical Deep Dive</h5>
+
+        <ul class="nav nav-tabs" id="myTab" role="tablist">
+          <li class="nav-item" role="presentation">
+            <button
+              class="nav-link active"
+              id="python-tab"
+              data-bs-toggle="tab"
+              data-bs-target="#python-tab-pane"
+              type="button"
+            >
+              Python (Flask)
+            </button>
+          </li>
+          <li class="nav-item" role="presentation">
+            <button
+              class="nav-link"
+              id="cli-tab"
+              data-bs-toggle="tab"
+              data-bs-target="#cli-tab-pane"
+              type="button"
+            >
+              Try it in `redis-cli`
+            </button>
+          </li>
+        </ul>
+        <div class="tab-content mt-3" id="myTabContent">
+          <div class="tab-pane fade show active" id="python-tab-pane">
+            <p>On every DNS lookup, we run these two commands:</p>
+            <pre><code class="language-python" style="background: #2b2b2b; color: #f8f8f2; padding: 1em; display: block; border-radius: 5px;">
+hash_key = f"dns:meta:{domain_name}"
+
+# 1. Atomically increment the hit counter
+r.hincrby(hash_key, 'hit_count', 1)
+
+# 2. Set the last fetched timestamp
+current_timestamp = time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime())
+r.hset(hash_key, 'last_fetched', current_timestamp)
+</code></pre>
+            <p>To display the metadata on this page, we run:</p>
+            <pre><code class="language-python" style="background: #2b2b2b; color: #f8f8f2; padding: 1em; display: block; border-radius: 5px;">
+# Get all fields and values from the hash
+metadata = r.hgetall(hash_key)
+# metadata is now a dict: {'hit_count': '5', 'last_fetched': '...'}
+</code></pre>
+          </div>
+
+          <div class="tab-pane fade" id="cli-tab-pane">
+            <p>
+              Open <code class="text-info">redis-cli</code> and query a domain
+              on the Home page. Then try these commands:
+            </p>
+            <pre><code style="background: #2b2b2b; color: #f8f8f2; padding: 1em; display: block; border-radius: 5px;">
+# See all keys in your database (you'll see your "dns:" and "dns:meta:" keys)
+KEYS *
+
+# Get all fields and values for the google.com hash
+HGETALL "dns:meta:google.com"
+
+# Get just the hit count
+HGET "dns:meta:google.com" "hit_count"
+
+# Increment the count yourself and then refresh this page!
+HINCRBY "dns:meta:google.com" "hit_count" 10
+</code></pre>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
