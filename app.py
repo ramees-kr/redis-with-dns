@@ -141,28 +141,6 @@ def feature_hashes():
 
     return render_template('feature_hashes.html', **context)
 
-@app.route('/feature/zsets')
-def feature_zsets():
-    """
-    Renders the Sorted Sets feature page, showing a leaderboard.
-    """
-    context = {
-        'active_page': 'zsets'
-    }
-    
-    leaderboard = []
-    if r:
-        # ZREVRANGE fetches a "reverse range" (highest score to lowest)
-        # We ask for ranks 0-9 (top 10) and use WITHSCORES=True
-        # This returns a list of tuples: [('google.com', 10.0), ('bing.com', 5.0)]
-        leaderboard = r.zrevrange(POPULARITY_KEY, 0, 9, withscores=True)
-        
-    context['leaderboard'] = leaderboard
-    context['leaderboard_key'] = POPULARITY_KEY
-        
-    return render_template('feature_zsets.html', **context)
-
-
 # This allows us to run the app directly with 'python app.py'
 if __name__ == '__main__':
     # debug=True will auto-reload the server when you save files
