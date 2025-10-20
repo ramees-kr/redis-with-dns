@@ -1,3 +1,4 @@
+import json
 from flask import Flask, render_template, request
 from dns_cache import get_dns_lookup, r
 import time
@@ -34,6 +35,7 @@ def home():
             context['ttl'] = ttl
             context['status'] = status
             context['duration'] = f"{duration:.2f}"
+            context['record_type'] = record_type
             
             # Check if the lookup was successful
             is_success = (status == "hit" or status == "miss")
@@ -75,6 +77,49 @@ def feature_lists():
 
 @app.route('/feature/hashes', methods=['GET', 'POST'])
 def feature_hashes():
+    context = {
+        'active_page': 'hashes'
+    }
+
+    if request.method == 'POST':
+        domain_name = request.form.get('domain')
+        
+        if domain_name and r:
+            # --- 1. Metadata Logic (Existing) ---
+            meta_key = f"{META_KEY_PREFIX}{domain_name}"
+            metadata = r.hgetall(meta_key)
+            
+            context['domain'] = domain_name
+            context['meta_key'] = meta_key 
+            context['metadata'] = metadata
+            
+            # --- 2. Core Cache Inspector Logic (using SCAN) ---
+            cached_records_data = []
+            scan_pattern = f"dns:cache:{domain_name}:*"
+            
+            # Use scan_iter for a memory-efficient way to find keys
+            for key in r.scan_iter(match=scan_pattern):
+                # For each key found, get its data and TTL
+                # We use a pipeline for efficiency, though one-by-one is also fine here
+                pipe = r.pipeline()
+                pipe.hgetall(key)
+                pipe.ttl(key)
+                results = pipe.execute()
+                
+                data = results[0] # Result of hgetall
+                ttl = results[1]  # Result of ttl
+                
+                # 'records' is stored as JSON, so we parse it
+                try:
+                    data['records_list'] = json.loads(data.get('records', '[]'))
+                except:
+                    data['records_list'] = ["Error parsing JSON"]
+
+                cached_records_data.append({'key': key, 'data': data, 'ttl': ttl})
+            
+            context['cached_records_data'] = cached_records_data
+
+    return render_template('feature_hashes.html', **context)
     context = {
         'active_page': 'hashes'
     }
