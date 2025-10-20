@@ -65,11 +65,11 @@
     
     <tr>
       <td><strong>Cache Key:</strong></td>
-      {% if 'negative' in status %}
+        {% if is_negative %}
         <td><code>dns:nx:{{ domain }}:{{ record_type }}</code> (String)</td>
-      {% else %}
+        {% else %}
         <td><code>dns:cache:{{ domain }}:{{ record_type }}</code> (Hash)</td>
-      {% endif %}
+        {% endif %}
     </tr>
 
     <tr>
@@ -81,10 +81,10 @@
       <td><strong>Lookup Time:</strong></td>
       <td>
         <strong>{{ duration }} ms</strong>
-        {% if 'hit' in status %}
-          <span class="text-success">(Fetched from Redis Cache)</span>
+        {% if from_cache %}
+        <span class="text-success">(Fetched from Redis Cache)</span>
         {% else %}
-          <span class="text-warning">(Fetched from Live DNS)</span>
+        <span class="text-warning">(Fetched from Live DNS)</span>
         {% endif %}
       </td>
     </tr>

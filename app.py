@@ -1,4 +1,5 @@
 import json
+
 from flask import Flask, render_template, request
 from dns_cache import get_dns_lookup, r
 import time
@@ -30,15 +31,21 @@ def home():
             # records will be a list of IPs or an {"error": ...} dict
             records, ttl, status, duration = get_dns_lookup(domain_name, record_type)
             
+            # 1. Broaden is_success check
+            is_success = (status != "error")
+            
+            # 2. Create explicit booleans for the template
+            is_negative = 'negative' in status
+            from_cache = 'hit' in status
+
             context['domain'] = domain_name
             context['records'] = records # Pass the list or dict to the template
             context['ttl'] = ttl
             context['status'] = status
             context['duration'] = f"{duration:.2f}"
             context['record_type'] = record_type
-            
-            # Check if the lookup was successful
-            is_success = (status == "hit" or status == "miss")
+            context['is_negative'] = is_negative
+            context['from_cache'] = from_cache
             
             if r and is_success:
                 log_entry = f"{domain_name} ({record_type})"
