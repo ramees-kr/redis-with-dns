@@ -1,3 +1,4 @@
+import json
 from flask import Flask, render_template, request
 from dns_cache import get_dns_lookup, r
 import time
@@ -9,6 +10,7 @@ app = Flask(__name__)
 RECENT_QUERIES_KEY = "dns:recent"
 MAX_RECENT_QUERIES = 10
 META_KEY_PREFIX = "dns:meta:"
+POPULARITY_KEY = "dns:popularity"
 
 @app.route('/', methods=['GET', 'POST'])
 def home():
@@ -22,38 +24,35 @@ def home():
     if request.method == 'POST':
         # 1. Get the domain from the form
         domain_name = request.form.get('domain')
+        record_type = request.form.get('record_type', 'A').strip()
 
         if domain_name:
-            # 2. Call our DNS/Redis logic
-            ip, ttl, status, duration = get_dns_lookup(domain_name)
+            # records will be a list of IPs or an {"error": ...} dict
+            records, ttl, status, duration = get_dns_lookup(domain_name, record_type)
             
-            # 3. Add all results to the context
             context['domain'] = domain_name
-            context['ip'] = ip
+            context['records'] = records # Pass the list or dict to the template
             context['ttl'] = ttl
             context['status'] = status
             context['duration'] = f"{duration:.2f}"
-
-            if r and status != "error":
-                # LPUSH adds the new domain to the left (front) of the list
-                r.lpush(RECENT_QUERIES_KEY, domain_name)
-                # LTRIM trims the list to keep only the first 10 items (0-9)
+            context['record_type'] = record_type
+            
+            # Check if the lookup was successful
+            is_success = (status == "hit" or status == "miss")
+            
+            if r and is_success:
+                log_entry = f"{domain_name} ({record_type})"
+                r.lpush(RECENT_QUERIES_KEY, log_entry)
                 r.ltrim(RECENT_QUERIES_KEY, 0, MAX_RECENT_QUERIES - 1)
-
-
-                hash_key = f"{META_KEY_PREFIX}{domain_name}"
-                # 1. Increment the 'hit_count' field by 1
-                # HINCRBY is atomic and safe.
-                r.hincrby(hash_key, 'hit_count', 1)
                 
-                # 2. Set the 'last_fetched' field to the current timestamp
-                # HSET is used to set or update a field's value.
+                # Metadata and Popularity are still domain-based
+                hash_key = f"{META_KEY_PREFIX}{domain_name}"
+                r.hincrby(hash_key, 'hit_count', 1)
                 current_timestamp = time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime())
                 r.hset(hash_key, 'last_fetched', current_timestamp)
+                
+                r.zincrby(POPULARITY_KEY, 1, domain_name)
 
-    # 4. Render the template, passing in all context variables
-    # If it's a GET request, context is empty and the form is blank
-    # If it's a POST, context is full and the results are shown
     return render_template('home.html', **context)
 
 
@@ -86,16 +85,40 @@ def feature_hashes():
         domain_name = request.form.get('domain')
         
         if domain_name and r:
-            hash_key = f"{META_KEY_PREFIX}{domain_name}"
-            
-            # HGETALL retrieves all fields and values from the hash
-            # It returns a dictionary in python-redis
-            metadata = r.hgetall(hash_key)
+            # --- 1. Metadata Logic (Existing) ---
+            meta_key = f"{META_KEY_PREFIX}{domain_name}"
+            metadata = r.hgetall(meta_key)
             
             context['domain'] = domain_name
-            context['hash_key'] = hash_key
+            context['meta_key'] = meta_key 
             context['metadata'] = metadata
             
+            # --- 2. Core Cache Inspector Logic (using SCAN) ---
+            cached_records_data = []
+            scan_pattern = f"dns:cache:{domain_name}:*"
+            
+            # Use scan_iter for a memory-efficient way to find keys
+            for key in r.scan_iter(match=scan_pattern):
+                # For each key found, get its data and TTL
+                # We use a pipeline for efficiency, though one-by-one is also fine here
+                pipe = r.pipeline()
+                pipe.hgetall(key)
+                pipe.ttl(key)
+                results = pipe.execute()
+                
+                data = results[0] # Result of hgetall
+                ttl = results[1]  # Result of ttl
+                
+                # 'records' is stored as JSON, so we parse it
+                try:
+                    data['records_list'] = json.loads(data.get('records', '[]'))
+                except:
+                    data['records_list'] = ["Error parsing JSON"]
+
+                cached_records_data.append({'key': key, 'data': data, 'ttl': ttl})
+            
+            context['cached_records_data'] = cached_records_data
+
     return render_template('feature_hashes.html', **context)
 
 # This allows us to run the app directly with 'python app.py'
