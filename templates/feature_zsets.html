@@ -46,21 +46,21 @@
         <h5 class="card-title">Why Use a Redis Sorted Set?</h5>
         <p>
           We need to maintain a "Top 10" list. A normal List isn't good, because
-          we'd have to find a domain, update its count, and re-sort the *entire
-          list* on every query. That's extremely slow!
+          we'd have to find a domain, update its count, and re-sort the
+          <em>entire list</em> on every query. That's extremely slow!
         </p>
         <p>
           A <strong>Sorted Set (ZSET)</strong> is the perfect data structure for
           this. It's a collection of unique members, where each member has an
-          associated **score**. Redis automatically keeps the collection sorted
-          by this score.
+          associated <strong>score</strong>. Redis automatically keeps the
+          collection sorted by this score.
         </p>
         <ul class="list-unstyled">
           <li class="mb-2">
             <code class="text-danger">ZINCRBY</code>: Atomically
             <strong>Z</strong
             >-Set-<strong>INCR</strong>ement-<strong>BY</strong>. This one
-            command finds a member, adds 1 to its score, and *instantly*
+            command finds a member, adds 1 to its score, and <em>instantly</em>
             re-positions it in the sorted set. This is an
             <strong>O(log N)</strong> operation, which is incredibly fast.
           </li>
@@ -103,7 +103,7 @@
               data-bs-target="#cli-tab-pane"
               type="button"
             >
-              Try it in `redis-cli`
+              Try it in <code>redis-cli</code>
             </button>
           </li>
         </ul>
