@@ -120,25 +120,6 @@ def feature_hashes():
             context['cached_records_data'] = cached_records_data
 
     return render_template('feature_hashes.html', **context)
-    context = {
-        'active_page': 'hashes'
-    }
-
-    if request.method == 'POST':
-        domain_name = request.form.get('domain')
-        
-        if domain_name and r:
-            hash_key = f"{META_KEY_PREFIX}{domain_name}"
-            
-            # HGETALL retrieves all fields and values from the hash
-            # It returns a dictionary in python-redis
-            metadata = r.hgetall(hash_key)
-            
-            context['domain'] = domain_name
-            context['hash_key'] = hash_key
-            context['metadata'] = metadata
-            
-    return render_template('feature_hashes.html', **context)
 
 # This allows us to run the app directly with 'python app.py'
 if __name__ == '__main__':
