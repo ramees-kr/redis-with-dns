@@ -77,6 +77,10 @@ def feature_lists():
 
 @app.route('/feature/hashes', methods=['GET', 'POST'])
 def feature_hashes():
+    """
+    Renders the Hashes page, including Metadata and Core Cache Inspector.
+    Allows users to input a domain and view its metadata and cached DNS records.
+    """
     context = {
         'active_page': 'hashes'
     }
@@ -85,7 +89,7 @@ def feature_hashes():
         domain_name = request.form.get('domain')
         
         if domain_name and r:
-            # --- 1. Metadata Logic (Existing) ---
+            # --- 1. Metadata Logic ---
             meta_key = f"{META_KEY_PREFIX}{domain_name}"
             metadata = r.hgetall(meta_key)
             
@@ -93,29 +97,38 @@ def feature_hashes():
             context['meta_key'] = meta_key 
             context['metadata'] = metadata
             
-            # --- 2. Core Cache Inspector Logic (using SCAN) ---
+            # --- 2. Core Cache Inspector Logic (Refactored) ---
             cached_records_data = []
             scan_pattern = f"dns:cache:{domain_name}:*"
             
-            # Use scan_iter for a memory-efficient way to find keys
-            for key in r.scan_iter(match=scan_pattern):
-                # For each key found, get its data and TTL
-                # We use a pipeline for efficiency, though one-by-one is also fine here
+            # Step 1: Get all matching keys from the iterator
+            keys_found = list(r.scan_iter(match=scan_pattern))
+            
+            if keys_found:
+                # Step 2: Create ONE pipeline outside the loop
                 pipe = r.pipeline()
-                pipe.hgetall(key)
-                pipe.ttl(key)
+                for key in keys_found:
+                    pipe.hgetall(key)
+                    pipe.ttl(key)
+                
+                # Step 3: Execute ONCE to get all data
                 results = pipe.execute()
                 
-                data = results[0] # Result of hgetall
-                ttl = results[1]  # Result of ttl
+                # Step 4: Process the results
+                # 'results' is a flat list: [hgetall_res1, ttl_res1, hgetall_res2, ttl_res2, ...]
                 
-                # 'records' is stored as JSON, so we parse it
-                try:
-                    data['records_list'] = json.loads(data.get('records', '[]'))
-                except:
-                    data['records_list'] = ["Error parsing JSON"]
+                for i, key in enumerate(keys_found):
+                    data = results[i * 2]       # The HGETALL result
+                    ttl = results[i * 2 + 1]    # The TTL result
+                    
+                    try:
+                        # Ensure 'data' is a dict before a .get()
+                        data = data if isinstance(data, dict) else {}
+                        data['records_list'] = json.loads(data.get('records', '[]'))
+                    except (json.JSONDecodeError, TypeError) as e:
+                        data['records_list'] = [f"Error parsing JSON: {e}"]
 
-                cached_records_data.append({'key': key, 'data': data, 'ttl': ttl})
+                    cached_records_data.append({'key': key, 'data': data, 'ttl': ttl})
             
             context['cached_records_data'] = cached_records_data
 
