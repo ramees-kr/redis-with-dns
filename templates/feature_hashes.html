@@ -1,0 +1,284 @@
+{% extends "layout.html" %} {% block content %}
+<h1 class="mb-1">Data Structure: Hashes</h1>
+<p class="lead text-info">Use Case: Storing Structured Data (Objects)</p>
+<hr class="my-4" />
+
+<div class="row g-4">
+  <div class="col-md-6">
+    <div class="card bg-dark border-secondary h-100">
+      <div class="card-body">
+        <h5 class="card-title">Demo 1: Domain Metadata (Analytics)</h5>
+        <p class="card-text">
+          Go to the "Home" page and query a domain (e.g., `google.com`) a few
+          times. Then, look it up here to see its analytics metadata (key:
+          <code>dns:meta:...</code>).
+        </p>
+
+        <form method="POST" action="/feature/hashes">
+          <div class="input-group">
+            <input
+              type="text"
+              class="form-control"
+              name="domain"
+              placeholder="e.g., google.com"
+              value="{{ domain or '' }}"
+              required
+            />
+            <button class="btn btn-primary" type="submit">Get All Data</button>
+          </div>
+        </form>
+
+        {% if domain %}
+        <h6 class="mt-4">
+          Metadata for: <code class="text-info">{{ meta_key }}</code>
+        </h6>
+        {% if metadata %}
+        <table class="table table-dark table-striped-columns mt-3">
+          <thead>
+            <tr>
+              <th>Field</th>
+              <th>Value</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for field, value in metadata.items() %}
+            <tr>
+              <td><code>{{ field }}</code></td>
+              <td><code>{{ value }}</code></td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% else %}
+        <p class="text-secondary mt-3">
+          No metadata found. Go query this domain on the Home page first!
+        </p>
+        {% endif %} {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-6">
+    <div class="card bg-dark border-secondary h-100">
+      <div class="card-body">
+        <h5 class="card-title">Why Use a Redis Hash?</h5>
+        <p>
+          A <strong>Hash</strong> is perfect for storing "objects," or any data
+          with named fields. This project demonstrates two powerful use cases
+          for Hashes:
+        </p>
+
+        <ol>
+          <li>
+            <strong>Demo 1 (Metadata):</strong> We use a Hash
+            (<code>dns:meta:...</code>) to store counters and timestamps for a
+            domain. Commands like <code>HINCRBY</code> are atomic and
+            purpose-built for incrementing a field, making it perfect for
+            analytics.
+          </li>
+          <li>
+            <strong>Demo 2 (Core Cache):</strong> We use a Hash
+            (<code>dns:cache:...</code>) to store the *result* of a DNS lookup.
+            The fields (<code>records</code>, <code>fetched_at</code>) are
+            stored together under a single key.
+          </li>
+        </ol>
+
+        <p>
+          The alternative is using multiple String keys (e.g.,
+          <code>dns:google.com:hits</code>,
+          <code>dns:google.com:last_fetched</code>). A Hash is far more
+          memory-efficient and cleaner, as it groups all related data under one
+          key.
+        </p>
+
+        <h6 class="mt-4">Key Commands for Hashes:</h6>
+        <ul class="list-unstyled">
+          <li class="mb-2">
+            <code class="text-danger">HSET</code> / <code>HSETNX</code>: Sets a
+            field's value. Performance: <strong>O(1)</strong>.
+          </li>
+          <li class="mb-2">
+            <code class="text-danger">HGET</code>: Gets a single field's value.
+            Performance: <strong>O(1)</strong>.
+          </li>
+          <li class="mb-2">
+            <code class="text-danger">HINCRBY</code>: Atomically increments a
+            field's value. Performance: <strong>O(1)</strong>.
+          </li>
+          <li>
+            <code class="text-danger">HGETALL</code>: Gets *all* fields and
+            values. Performance: <strong>O(N)</strong>, where N is the number of
+            fields (use with caution on large hashes).
+          </li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% if domain %}
+<div class="row g-4 mt-0 pt-4">
+  <div class="col-12">
+    <div class="card bg-dark border-secondary">
+      <div class="card-body">
+        <h5 class="card-title">Demo 2: Core Cache Inspector</h5>
+        <p class="card-text">
+          Below are all the records for
+          <code class="text-info">{{ domain }}</code> found in the
+          <strong>core cache</strong> (keys matching
+          <code>dns:cache:{{ domain }}:*</code>). This data is found using the
+          <code>SCAN</code> command.
+        </p>
+
+        {% if cached_records_data %}
+        <div class="row g-3">
+          {% for item in cached_records_data %}
+          <div class="col-md-6">
+            <div class="card bg-dark border-secondary-subtle">
+              <div class="card-header">
+                <strong>Key:</strong> <code>{{ item.key }}</code>
+                <span class="badge text-bg-info float-end"
+                  >TTL: {{ item.ttl }}s</span
+                >
+              </div>
+              <div class="card-body">
+                <ul class="list-group list-group-flush">
+                  <li
+                    class="list-group-item bg-dark text-white border-secondary-subtle ps-0"
+                  >
+                    <strong>Type:</strong> {{ item.data.record_type }}
+                  </li>
+                  <li
+                    class="list-group-item bg-dark text-white border-secondary-subtle ps-0"
+                  >
+                    <strong>Fetched:</strong> {{ item.data.fetched_at }}
+                  </li>
+                  <li
+                    class="list-group-item bg-dark text-white border-secondary-subtle ps-0"
+                  >
+                    <strong>Records:</strong>
+                    <ul class="list-unstyled mb-0 ps-3">
+                      {% for record in item.data.records_list %}
+                      <li><code>{{ record }}</code></li>
+                      {% else %}
+                      <li class="text-secondary">
+                        <em>(No records found)</em>
+                      </li>
+                      {% endfor %}
+                    </ul>
+                  </li>
+                </ul>
+              </div>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+        {% else %}
+        <p class="text-secondary">
+          No core cache entries found for this domain. (Go query it on the Home
+          page!)
+        </p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<div class="row g-4">
+  <div class="col-12">
+    <div class="card bg-dark border-secondary">
+      <div class="card-body">
+        <h5 class="card-title">Technical Deep Dive</h5>
+
+        <ul class="nav nav-tabs" id="myTab" role="tablist">
+          <li class="nav-item" role="presentation">
+            <button
+              class="nav-link active"
+              id="python-tab"
+              data-bs-toggle="tab"
+              data-bs-target="#python-tab-pane"
+              type="button"
+            >
+              Python (Flask)
+            </button>
+          </li>
+          <li class="nav-item" role="presentation">
+            <button
+              class="nav-link"
+              id="cli-tab"
+              data-bs-toggle="tab"
+              data-bs-target="#cli-tab-pane"
+              type="button"
+            >
+              Try it in `redis-cli`
+            </button>
+          </li>
+        </ul>
+        <div class="tab-content mt-3" id="myTabContent">
+          <div class="tab-pane fade show active" id="python-tab-pane">
+            <p>
+              For the <strong>Metadata</strong> (<code>dns:meta:...</code>), we
+              use simple Hash commands:
+            </p>
+            <pre><code class="language-python" style="background: #2b2b2b; color: #f8f8f2; padding: 1em; display: block; border-radius: 5px;">
+# 1. Atomically increment the hit counter
+r.hincrby(meta_key, 'hit_count', 1)
+
+# 2. Get all metadata fields and values
+metadata = r.hgetall(meta_key)
+</code></pre>
+            <p class="mt-4">
+              For the
+              <strong>Core Cache Inspector</strong>
+              (<code>dns:cache:...</code>), we use <code>scan_iter</code> to
+              find all matching keys without blocking the server:
+            </p>
+            <pre><code class="language-python" style="background: #2b2b2b; color: #f8f8f2; padding: 1em; display: block; border-radius: 5px;">
+cached_records_data = []
+scan_pattern = f"dns:cache:{domain_name}:*"
+
+# scan_iter is a Python generator, it's very efficient
+for key in r.scan_iter(match=scan_pattern):
+    # For each key, we get its full Hash data
+    data = r.hgetall(key)
+    cached_records_data.append(data)
+</code></pre>
+          </div>
+
+          <div class="tab-pane fade" id="cli-tab-pane">
+            <p>You can query the <strong>Metadata</strong> hash directly:</p>
+            <pre><code style="background: #2b2b2b; color: #f8f8f2; padding: 1em; display: block; border-radius: 5px;">
+# Get all fields and values for the google.com metadata hash
+HGETALL "dns:meta:google.com"
+
+# Increment the count yourself!
+HINCRBY "dns:meta:google.com" "hit_count" 10
+</code></pre>
+            <p class="mt-4">
+              To find all the <strong>Core Cache</strong> keys,
+              <strong
+                >do not use <code>KEYS "dns:cache:google.com:*"</code></strong
+              >
+              in production, as it blocks your entire server! Instead, use
+              <code>SCAN</code>:
+            </p>
+            <pre><code style="background: #2b2b2b; color: #f8f8f2; padding: 1em; display: block; border-radius: 5px;">
+# Start a scan from cursor 0, matching our pattern
+SCAN 0 MATCH "dns:cache:google.com:*" COUNT 100
+
+# The server returns a new cursor and a list of keys.
+# If the cursor is not "0", run it again with the new cursor:
+SCAN [new_cursor_from_last_command] MATCH "dns:cache:google.com:*" COUNT 100
+
+# Once you have a key, inspect its contents:
+HGETALL "dns:cache:google.com:A"
+</code></pre>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
