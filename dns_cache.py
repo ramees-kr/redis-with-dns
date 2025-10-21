@@ -1,3 +1,4 @@
+import os
 import redis
 import dns.resolver
 import time
@@ -7,14 +8,25 @@ import json
 # This is now the default TTL for *negative caching* only
 NEGATIVE_CACHE_TTL_SECONDS = 60
 
+# 1. Get the Redis URL from environment variables
+#    Platforms like Render/Redis Cloud set this automatically
+REDIS_URL = os.environ.get('REDIS_URL')
 # --- Redis Connection ---
+r = None
 try:
-    r = redis.Redis(
-        host='localhost', 
-        port=6379, 
-        db=0,
-        decode_responses=True
-    )
+    if REDIS_URL:
+        # 3. Connect to the cloud database
+        print(f"Connecting to Redis Cloud at {REDIS_URL.split('@')[-1]}...")
+        r = redis.from_url(REDIS_URL, decode_responses=True)
+    else:
+        # 4. Fallback to localhost if no env var is set
+        print("REDIS_URL not found, connecting to localhost...")
+        r = redis.Redis(
+            host='localhost', 
+            port=6379, 
+            db=0,
+            decode_responses=True
+        )
     r.ping()
     print("Connected to Redis successfully!")
 except redis.exceptions.ConnectionError as e:
