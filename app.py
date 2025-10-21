@@ -18,19 +18,18 @@ POPULARITY_KEY = "dns:popularity"
 @app.route('/', methods=['GET', 'POST'])
 def home():
     """
-    Renders the Home page and handles the form submission.
+    Renders the Home page, which is now a full dashboard.
     """
-    # This context dict will hold all variables for the template
     context = {}
-    context['active_page'] = 'home' 
+    context['active_page'] = 'home'
     
+    # --- Part 1: Handle Query (if it's a POST) ---
     if request.method == 'POST':
-        # 1. Get the domain from the form
         domain_name = request.form.get('domain')
         record_type = request.form.get('record_type', 'A').strip()
 
         if domain_name:
-            # records will be a list of IPs or an {"error": ...} dict
+            # Run the DNS lookup
             records, ttl, status, duration = get_dns_lookup(domain_name, record_type)
             
             # 1. Broaden is_success check
@@ -40,8 +39,9 @@ def home():
             is_negative = 'negative' in status
             from_cache = 'hit' in status
 
+            # Add query results to context
             context['domain'] = domain_name
-            context['records'] = records # Pass the list or dict to the template
+            context['records'] = records 
             context['ttl'] = ttl
             context['status'] = status
             context['duration'] = f"{duration:.2f}"
@@ -49,21 +49,65 @@ def home():
             context['is_negative'] = is_negative
             context['from_cache'] = from_cache
             
+            # Run analytics logic if the query wasn't an error
             if r and is_success:
                 log_entry = f"{domain_name} ({record_type})"
                 r.lpush(RECENT_QUERIES_KEY, log_entry)
                 r.ltrim(RECENT_QUERIES_KEY, 0, MAX_RECENT_QUERIES - 1)
                 
-                # Metadata and Popularity are still domain-based
                 hash_key = f"{META_KEY_PREFIX}{domain_name}"
                 r.hincrby(hash_key, 'hit_count', 1)
                 current_timestamp = time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime())
                 r.hset(hash_key, 'last_fetched', current_timestamp)
                 
                 r.zincrby(POPULARITY_KEY, 1, domain_name)
+            
+            # --- Fetch domain-specific dashboard widgets ---
+            
+            # 1. Fetch Metadata (for the Metadata Box)
+            meta_key = f"{META_KEY_PREFIX}{domain_name}"
+            context['meta_key'] = meta_key
+            context['metadata'] = r.hgetall(meta_key) if r else {}
+            
+            # 2. Fetch Core Cache Inspector Data
+            cached_records_data = []
+            if r:
+                scan_pattern = f"dns:cache:{domain_name}:*"
+                keys_found = list(r.scan_iter(match=scan_pattern))
+                
+                if keys_found:
+                    pipe = r.pipeline()
+                    for key in keys_found:
+                        pipe.hgetall(key)
+                        pipe.ttl(key)
+                    results = pipe.execute()
+                    
+                    for i, key in enumerate(keys_found):
+                        data = results[i * 2]
+                        ttl = results[i * 2 + 1]
+                        try:
+                            data = data if isinstance(data, dict) else {}
+                            data['records_list'] = json.loads(data.get('records', '[]'))
+                        except (json.JSONDecodeError, TypeError) as e:
+                            data['records_list'] = [f"Error parsing JSON: {e}"]
+                        cached_records_data.append({'key': key, 'data': data, 'ttl': ttl})
+            
+            context['cached_records_data'] = cached_records_data
+
+    # --- Part 2: Fetch Global Dashboard Widgets (always) ---
+    if r:
+        # 1. Fetch Recent Queries (for Lists Box)
+        context['recent_queries'] = r.lrange(RECENT_QUERIES_KEY, 0, -1)
+        
+        # 2. Fetch Leaderboard (for Sorted Sets Box)
+        context['leaderboard'] = r.zrevrange(POPULARITY_KEY, 0, 9, withscores=True)
+        context['leaderboard_key'] = POPULARITY_KEY
+    else:
+        context['recent_queries'] = []
+        context['leaderboard'] = []
+        context['leaderboard_key'] = POPULARITY_KEY # Still need key for template
 
     return render_template('home.html', **context)
-
 
 @app.route('/feature/lists')
 def feature_lists():
