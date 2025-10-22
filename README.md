@@ -1,98 +1,118 @@
 # Redis DNS Caching Tutorial & Dashboard
 
+**Live Demo:** [https://redis-with-dns.onrender.com/](https://redis-with-dns.onrender.com/)
+
 This project is a hands-on, interactive web application designed to teach core Redis data structures by building a practical, high-performance DNS caching system.
 
-The application is a "tutorial dashboard" that not only performs real DNS lookups but also visualizes how different Redis data structures are used to cache results, track analytics, and manage data efficiently.
+The application is a "tutorial dashboard" that not only performs real DNS lookups but also visualizes how different Redis data structures are used together to cache results, track analytics, and manage data efficiently.
 
 ![Redis DNS Dashboard Screenshot](docs/screenshots/001-dashboard.jpeg)
 
 ## Features
 
-- **Real-time DNS Cache:** Performs live DNS lookups for `A`, `MX`, `TXT`, and `NS` records.
+- **Live DNS Query Tool:** Performs DNS lookups for `A`, `MX`, `TXT`, and `NS` records.
 - **Intelligent Caching:**
   - Caches successful lookups in a **Redis Hash** with the record's real TTL.
-  - Caches failed lookups (`NXDOMAIN`) in a **Redis String** (negative caching) to prevent repeated bad queries.
-- **Central Dashboard:** The homepage provides a complete overview of the system's state, built with multiple Redis data types.
-- **Deep-Dive Pages:** Each data structure has its own dedicated tutorial page explaining the "Why" (use case) and "How" (code and performance).
+  - Caches failed lookups (`NXDOMAIN`, NoAnswer) in a **Redis String** (negative caching) to reduce load on upstream servers.
+  - Clears stale negative cache entries upon successful lookup.
+- **Central Dashboard:** The homepage provides a complete overview, showcasing multiple Redis data types working together:
+  - Query results (Hash/String)
+  - Domain metadata (Hash)
+  - All cached records for the domain (Hash + `SCAN`)
+  - Recent query log (List)
+  - Popularity leaderboard (Sorted Set)
+- **Deep-Dive Pages:** Each data structure has its own dedicated tutorial page explaining the "Why" (use case) and "How" (code and performance) with interactive examples.
 
 ## Tech Stack
 
 - **Backend:** Python 3, Flask
-- **Database:** Redis
+- **Database:** Redis (connects to Redis Cloud or local instance)
 - **DNS:** `dnspython` library
 - **Frontend:** Bootswatch (Vapor Theme)
+- **Deployment:** Render, Gunicorn
 
 ## How to Run Locally
 
 1.  **Clone the repository:**
 
     ```bash
-    git clone [your-repo-url]
-    cd [your-repo-directory]
+    git clone [https://github.com/ramees-kr/redis-with-dns.git](https://github.com/ramees-kr/redis-with-dns.git)
+    cd redis-with-dns
     ```
 
-2.  **Start Redis:**
-    This project requires an active Redis server. The simplest way is with Docker:
+2.  **Start Redis (Local):**
+    The simplest way is with Docker:
 
     ```bash
     docker run -d -p 6379:6379 --name redis-dns-tutorial redis/redis-stack:latest
     ```
 
-3.  **Set up the Python environment:**
+    _(Alternatively, set up a `.env` file with your Redis Cloud credentials as shown in Deployment Setup below)_
+
+3.  **Set up Python environment:**
 
     ```bash
-    # Create a virtual environment
     python -m venv venv
-
-    # Activate it
-    # Windows
-    .\venv\Scripts\activate
-    # macOS/Linux
-    source venv/bin/activate
-
-    # Install dependencies
+    # Activate: source venv/bin/activate (macOS/Linux) or .\venv\Scripts\activate (Windows)
     pip install -r requirements.txt
     ```
 
 4.  **Run the Flask application:**
 
     ```bash
-    # This will run the app in debug mode
     flask --app app run --debug
     ```
 
-5.  Open your browser to `http://127.0.0.1:5000` to see the application.
+5.  Open your browser to `http://127.0.0.1:5000`.
+
+---
+
+## Deployment Setup (Render + Redis Cloud)
+
+This app is designed for easy deployment on platforms like Render using a cloud Redis provider.
+
+1.  **Create a free Redis Cloud database:**
+
+    - Sign up at [Redis Cloud](https://redis.com/try-free/).
+    - Create a new database and note down the **Host**, **Port**, and **Password**.
+
+2.  **Deploy on Render:**
+    - Create a new "Web Service" on Render and connect it to your GitHub repository.
+    - Render will automatically detect `requirements.txt` and `Procfile`.
+    - Go to the "Environment" tab and add the following environment variables using the credentials from Redis Cloud:
+      - `REDIS_HOST`: (Your Redis Cloud host)
+      - `REDIS_PORT`: (Your Redis Cloud port)
+      - `REDIS_PASSWORD`: (Your Redis Cloud password)
+      - `REDIS_USERNAME`: `default` (usually)
+    - Render will build and deploy your application.
+
+_(Optional: For local development using Redis Cloud, create a `.env` file in the root directory with the above variables and add `from dotenv import load_dotenv; load_dotenv()` at the top of `app.py`. Make sure `.env` is in your `.gitignore`!)_
 
 ---
 
 ## Learning Guide: Redis Data Structures
 
-This project is designed to teach Redis data structures by example. Here’s how each one is used.
+This project demonstrates practical uses for several core Redis data structures.
 
 ### 1. Redis Strings
 
-- **Use Case:** Negative Caching
-- **How it Works:** When a DNS lookup fails (e.g., `NXDOMAIN`), we store a simple **String** key like `dns:nx:bad-domain.com:A` with a short TTL. This is extremely fast and lightweight.
-- **Key Commands:** `SETEX` (to set with TTL), `GET` (to check).
+- **Use Case:** Negative Caching.
+- **Implementation:** `SETEX` stores "NXDOMAIN" status with a short TTL for failed lookups.
 
 ### 2. Redis Lists
 
-- **Use Case:** Recent Query Log
-- **How it Works:** The "Recent Queries" widget on the dashboard is powered by a **List** key (`dns:recent`). Every query `LPUSH`-es the new domain to the front, and `LTRIM` is used to keep the list capped at 10 items.
-- **Key Commands:** `LPUSH` (add to front), `LTRIM` (trim to size), `LRANGE` (read the list).
+- **Use Case:** Recent Query Log (capped list).
+- **Implementation:** `LPUSH` adds queries, `LTRIM` keeps the list size fixed.
 
 ### 3. Redis Hashes
 
-- **Use Case:** Caching DNS records and tracking metadata.
-- **How it Works:** Hashes are used in two key places:
-  1.  **Core Cache:** Successful DNS lookups are stored in a **Hash** (e.g., `dns:cache:google.com:A`) with fields like `records`, `fetched_at`, etc. This is perfect for storing an "object".
-  2.  **Metadata:** The "Domain Metadata" widget uses a separate **Hash** (`dns:meta:google.com`) with `HINCRBY` to atomically increment a `hit_count` field, demonstrating a powerful analytics pattern.
-- **Key Commands:** `HSET`, `HGETALL`, `HINCRBY`, and `SCAN` (to find all cache keys for a domain).
+- **Use Cases:** Storing structured cache data and atomic counters.
+- **Implementation:**
+  - Core cache stores DNS results (`records`, `fetched_at`).
+  - Metadata uses `HINCRBY` for hit counts.
+  - `SCAN` iterates keys efficiently for the dashboard inspector.
 
 ### 4. Redis Sorted Sets (ZSETs)
 
-- **Use Case:** Popularity Leaderboard
-- **How it Works:** The "Top 10 Leaderboard" is a **Sorted Set** (`dns:popularity`). Every query runs `ZINCRBY`, which atomically increments the "score" for that domain. Redis keeps the set sorted automatically.
-- **Key Commands:** `ZINCRBY` (increment score), `ZREVRANGE` (get top 10).
-
----
+- **Use Case:** Real-time popularity leaderboard.
+- **Implementation:** `ZINCRBY` atomically updates domain scores on each query; `ZREVRANGE` retrieves the top N.
