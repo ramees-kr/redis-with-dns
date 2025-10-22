@@ -36,7 +36,7 @@ The application is a "tutorial dashboard" that not only performs real DNS lookup
 1.  **Clone the repository:**
 
     ```bash
-    git clone [https://github.com/ramees-kr/redis-with-dns.git](https://github.com/ramees-kr/redis-with-dns.git)
+    git clone https://github.com/ramees-kr/redis-with-dns.git
     cd redis-with-dns
     ```
 

@@ -10,7 +10,7 @@ NEGATIVE_CACHE_TTL_SECONDS = 60
 
 # 1. Get the Redis URL from environment variables
 #    Platforms like Render/Redis Cloud set this automatically
-# 1. Get Redis credentials from environment variables
+# 2. Get Redis credentials from environment variables
 REDIS_HOST = os.environ.get('REDIS_HOST')
 REDIS_PORT = os.environ.get('REDIS_PORT')
 REDIS_USER = os.environ.get('REDIS_USERNAME', 'default') # Use 'default' if not set
