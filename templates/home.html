@@ -1,95 +1,242 @@
-{% extends "layout.html" %} {% block content %}
+{% extends "layout.html" %} 
+{% block content %}
 
-<h1 class="mb-4">Redis DNS Cache</h1>
-<p class="lead">
-  This tool performs a DNS lookup and uses Redis to cache the result for 60
-  seconds. Query a domain twice to see the cache in action!
-</p>
-
-<hr class="my-4" />
-
-<div class="card bg-dark border-secondary mb-4">
+<h1 class="mb-4">Redis DNS Dashboard</h1>
+<div class="card border-primary mb-4">
+  <div class="card-header">
+    <h5 class="card-title mb-0">Query a Domain</h5>
+  </div>
   <div class="card-body">
-    <h5 class="card-title">Query a Domain</h5>
-
-<form method="POST" action="/">
-        <div class="input-group">
-          <input 
-            type="text" 
-            class="form-control" 
-            name="domain" 
-            placeholder="e.g., google.com"
-            value="{{ domain or '' }}"
-            required>
-          
-          <select class="form-select" name="record_type" style="flex-grow: 0.2;">
-  <option value="A" {% if record_type == 'A' %}selected{% endif %}>A</option>
-  <option value="MX" {% if record_type == 'MX' %}selected{% endif %}>MX</option>
-  <option value="TXT" {% if record_type == 'TXT' %}selected{% endif %}>TXT</option>
-  <option value="NS" {% if record_type == 'NS' %}selected{% endif %}>NS</option>
-</select>
-          
-          <button class="btn btn-primary" type="submit">Query</button>
-        </div>
-      </form>
+    <form method="POST" action="/">
+      <div class="input-group">
+        <input 
+          type="text" 
+          class="form-control" 
+          name="domain" 
+          placeholder="e.g., google.com"
+          value="{{ domain or '' }}"
+          required>
+        
+        <select class="form-select" name="record_type" style="flex-grow: 0.2;">
+          <option value="A" {% if record_type == 'A' %}selected{% endif %}>A</option>
+          <option value="MX" {% if record_type == 'MX' %}selected{% endif %}>MX</option>
+          <option value="TXT" {% if record_type == 'TXT' %}selected{% endif %}>TXT</option>
+          <option value="NS" {% if record_type == 'NS' %}selected{% endif %}>NS</option>
+        </select>
+        
+        <button class="btn btn-primary" type="submit">Query</button>
+      </div>
+    </form>
   </div>
 </div>
 
 {% if domain %}
-<div class="card bg-dark border-secondary">
-  <div class="card-header">
-    Result for: <strong class="text-info">{{ domain }}</strong>
-  </div>
-  <div class="card-body">
-    {% if status == 'hit' %}
-    <span class="badge text-bg-success fs-6 mb-2">Cache Hit</span>
-    {% else %}
-    <span class="badge text-bg-warning fs-6 mb-2">Cache Miss</span>
-    {% endif %}
-
-<table class="table table-dark table-striped-columns mt-3">
-  <tbody>
-    <tr>
-      {% if records.error %}
-        <td style="width: 150px;"><strong>Error:</strong></td>
-        <td><code>{{ records.error }}</code></td>
-      {% else %}
-        <td style="width: 150px;"><strong>{{ record_type }} Records:</strong></td>
-        <td>
-          {% for record in records %}
-            <code>{{ record }}</code><br>
-          {% endfor %}
-        </td>
-      {% endif %}
-    </tr>
+  <h2 class="h4 mt-5 mb-3">Results for: <strong class="text-primary">{{ domain }}</strong></h2>
+  
+  <div class="row g-4">
+    <div class="col-lg-6">
+      <div class="card border-secondary h-100">
+        <div class="card-header">
+          Query Result
+        </div>
+        <div class="card-body">
+          <p class="card-text small">
+            Results are cached in a <strong>Redis Hash</strong> with a dynamic TTL. Negative lookups are cached as <strong>Strings</strong>.
+          </p>
+          <table class="table table-striped-columns">
+            <tbody>
+              <tr>
+                {% if records.error %}
+                  <td style="width: 150px;"><strong>Error:</strong></td>
+                  <td><code>{{ records.error }}</code></td>
+                {% else %}
+                  <td style="width: 150px;"><strong>{{ record_type }} Records:</strong></td>
+                  <td>
+                    {% for record in records %}
+                      <code>{{ record }}</code><br>
+                    {% endfor %}
+                  </td>
+                {% endif %}
+              </tr>
+              <tr>
+                <td><strong>Cache Key:</strong></td>
+                {% if is_negative %}
+                  <td><code>dns:nx:{{ domain }}:{{ record_type }}</code></td>
+                {% else %}
+                  <td><code>dns:cache:{{ domain }}:{{ record_type }}</code></td>
+                {% endif %}
+              </tr>
+              <tr>
+                <td><strong>TTL Remaining:</strong></td>
+                <td>{{ ttl }} seconds</td>
+              </tr>
+              <tr>
+                <td><strong>Lookup Time:</strong></td>
+                <td>
+                  <strong>{{ duration }} ms</strong>
+                  {% if from_cache %}
+                    <span class="text-success small">(From Cache)</span>
+                  {% else %}
+                    <span class="text-warning small">(Live DNS)</span>
+                  {% endif %}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
     
-    <tr>
-      <td><strong>Cache Key:</strong></td>
-        {% if is_negative %}
-        <td><code>dns:nx:{{ domain }}:{{ record_type }}</code> (String)</td>
-        {% else %}
-        <td><code>dns:cache:{{ domain }}:{{ record_type }}</code> (Hash)</td>
-        {% endif %}
-    </tr>
+    <div class="col-lg-6">
+      <div class="card border-secondary h-100">
+        <div class="card-header">
+          <a href="/feature/hashes" class="text-decoration-none">
+            Domain Metadata (Hashes) &rarr;
+          </a>
+        </div>
+        <div class="card-body">
+          <p class="card-text small">
+            Metadata is stored in a <strong>Redis Hash</strong> and updated with atomic <code>HINCRBY</code> commands.
+          </p>
+          {% if metadata %}
+            <table class="table table-striped-columns">
+              <thead>
+                <tr>
+                  <th>Field</th>
+                  <th>Value</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for field, value in metadata.items() %}
+                <tr>
+                  <td><code>{{ field }}</code></td>
+                  <td><code>{{ value }}</code></td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          {% else %}
+            <p class="text-secondary">No metadata found.</p>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+    
+    <div class="col-12">
+      <div class="card border-secondary">
+        <div class="card-header">
+          <a href="/feature/hashes" class="text-decoration-none">
+            Core Cache Inspector (Hashes + SCAN) &rarr;
+          </a>
+        </div>
+        <div class="card-body">
+          <p class="card-text small">
+            All cache entries for this domain, found using the production-safe <code>SCAN</code> command.
+          </p>
+          {% if cached_records_data %}
+            <div class="row g-3">
+              {% for item in cached_records_data %}
+              <div class="col-md-6">
+                <div class="card">
+                  <div class="card-header small">
+                    <strong>Key:</strong> <code>{{ item.key }}</code>
+                    <span class="badge text-bg-info float-end">TTL: {{ item.ttl }}s</span>
+                  </div>
+                  <ul class="list-group list-group-flush small">
+                    <li class="list-group-item"><strong>Type:</strong> {{ item.data.record_type }}</li>
+                    <li class="list-group-item"><strong>Fetched:</strong> {{ item.data.fetched_at }}</li>
+                    <li class="list-group-item">
+                      <strong>Records:</strong>
+                      <ul class="list-unstyled mb-0 ps-3">
+                        {% for record in item.data.records_list %}
+                          <li><code>{{ record }}</code></li>
+                        {% else %}
+                          <li class="text-secondary"><em>(No records)</em></li>
+                        {% endfor %}
+                      </ul>
+                    </li>
+                  </ul>
+                </div>
+              </div>
+              {% endfor %}
+            </div>
+          {% else %}
+            <p class="text-secondary">No core cache entries found for this domain.</p>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+{% endif %}
 
-    <tr>
-      <td><strong>TTL Remaining:</strong></td>
-      <td>{{ ttl }} seconds</td>
-    </tr>
-
-    <tr>
-      <td><strong>Lookup Time:</strong></td>
-      <td>
-        <strong>{{ duration }} ms</strong>
-        {% if from_cache %}
-        <span class="text-success">(Fetched from Redis Cache)</span>
+<h2 class="h4 mt-5 mb-3">Global Dashboard</h2>
+<div class="row g-4">
+  
+  <div class="col-lg-6">
+    <div class="card border-secondary h-100">
+      <div class="card-header">
+        <a href="/feature/lists" class="text-decoration-none">
+          Recent Queries (Lists) &rarr;
+        </a>
+      </div>
+      <div class="card-body">
+        <p class="card-text small">
+          A capped list of the 10 most recent queries, implemented with <code>LPUSH</code> and <code>LTRIM</code> on a <strong>Redis List</strong>.
+        </p>
+        {% if recent_queries %}
+          <ul class="list-group list-group-flush">
+            {% for query in recent_queries %}
+            <li class="list-group-item">
+              {% if loop.index == 1 %}
+                <span class="badge text-bg-primary me-2">NEW</span>
+              {% endif %}
+              {{ query }}
+            </li>
+            {% endfor %}
+          </ul>
         {% else %}
-        <span class="text-warning">(Fetched from Live DNS)</span>
+          <p class="text-secondary">No queries yet.</p>
         {% endif %}
-      </td>
-    </tr>
-  </tbody>
-</table>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-6">
+    <div class="card border-secondary h-100">
+      <div class="card-header">
+        <a href="/feature/zsets" class="text-decoration-none">
+          Top 10 Leaderboard (Sorted Sets) &rarr;
+        </a>
+      </div>
+      <div class="card-body">
+        <p class="card-text small">
+          A real-time leaderboard powered by <code>ZINCRBY</code> on a <strong>Redis Sorted Set</strong>.
+        </p>
+        {% if leaderboard %}
+          <table class="table table-striped-columns">
+            <thead>
+              <tr>
+                <th>Rank</th>
+                <th>Domain</th>
+                <th>Score</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for domain, score in leaderboard %}
+              <tr>
+                <td><strong>#{{ loop.index }}</strong></td>
+                <td><code>{{ domain }}</code></td>
+                <td>{{ score|int }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        {% else %}
+          <p class="text-secondary">No queries yet.</p>
+        {% endif %}
+      </div>
+    </div>
   </div>
 </div>
-{% endif %} {% endblock %}
+
+{% endblock %}

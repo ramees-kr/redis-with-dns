@@ -1,12 +1,12 @@
 <!DOCTYPE html>
-<html lang="en" data-bs-theme="light">
+<html lang="en" data-bs-theme="dark">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Redis DNS Tutorial</title>
 
     <link
-      href="https://cdn.jsdelivr.net/npm/bootswatch@5.3.3/dist/slate/bootstrap.min.css"
+      href="https://cdn.jsdelivr.net/npm/bootswatch@5.3.3/dist/vapor/bootstrap.min.css"
       rel="stylesheet"
     />
 
@@ -19,7 +19,8 @@
       .sidebar {
         width: 280px;
         flex-shrink: 0;
-        background: #212529;
+        /* Use theme's dark background */
+        background: var(--bs-dark);
       }
       .content {
         flex-grow: 1;
@@ -28,7 +29,7 @@
     </style>
   </head>
   <body>
-    <div class="sidebar p-3">
+    <div class="sidebar p-3 bg-dark">
       <h4 class="text-white mb-3">Redis Tutorial</h4>
       <ul class="nav nav-pills flex-column">
         <li class="nav-item">
@@ -36,7 +37,7 @@
             href="/"
             class="nav-link text-white {% if active_page == 'home' %}active{% endif %}"
           >
-            Home (DNS Query)
+            Dashboard
           </a>
         </li>
         <li class="nav-item mt-2">

@@ -1,3 +1,4 @@
+import os
 import redis
 import dns.resolver
 import time
@@ -7,14 +8,36 @@ import json
 # This is now the default TTL for *negative caching* only
 NEGATIVE_CACHE_TTL_SECONDS = 60
 
+# 1. Get the Redis URL from environment variables
+#    Platforms like Render/Redis Cloud set this automatically
+# 2. Get Redis credentials from environment variables
+REDIS_HOST = os.environ.get('REDIS_HOST')
+REDIS_PORT = os.environ.get('REDIS_PORT')
+REDIS_USER = os.environ.get('REDIS_USERNAME', 'default') # Use 'default' if not set
+REDIS_PASSWORD = os.environ.get('REDIS_PASSWORD')
+
 # --- Redis Connection ---
+r = None
 try:
-    r = redis.Redis(
-        host='localhost', 
-        port=6379, 
-        db=0,
-        decode_responses=True
-    )
+    if REDIS_HOST and REDIS_PORT and REDIS_PASSWORD:
+        # 3. Connect to the cloud database using credentials
+        print(f"Connecting to Redis Cloud at {REDIS_HOST}:{REDIS_PORT}...")
+        r = redis.Redis(
+            host=REDIS_HOST,
+            port=int(REDIS_PORT), # Convert port to an integer
+            username=REDIS_USER,
+            password=REDIS_PASSWORD,
+            decode_responses=True
+        )
+    else:
+        # 4. Fallback to localhost if no env vars are set
+        print("Redis credentials not found, connecting to localhost...")
+        r = redis.Redis(
+            host='localhost', 
+            port=6379, 
+            db=0,
+            decode_responses=True
+        )
     r.ping()
     print("Connected to Redis successfully!")
 except redis.exceptions.ConnectionError as e:
